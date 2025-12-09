@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full bg-gray-50">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,140 +10,189 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        
+        /* Custom Scrollbar for Sidebar */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #64748b; }
     </style>
 </head>
-<body class="h-full flex flex-col md:flex-row overflow-hidden">
+<body class="h-full flex flex-col md:flex-row overflow-hidden bg-white">
 
-    <div class="w-full md:w-80 bg-white border-r border-gray-200 flex flex-col h-1/3 md:h-full">
-        <div class="p-5 border-b border-gray-100 bg-white z-10 flex justify-between items-center">
-            <h2 class="font-bold text-gray-800 flex items-center gap-2">
-                <i data-lucide="library" class="w-5 h-5 text-indigo-600"></i>
-                Saved Library
+    <div class="w-full md:w-80 bg-slate-900 text-slate-300 flex flex-col h-1/3 md:h-full flex-shrink-0 shadow-xl z-20">
+        <div class="p-6 border-b border-slate-800 bg-slate-900 z-10 flex justify-between items-center">
+            <h2 class="font-bold text-white tracking-tight flex items-center gap-3">
+                <div class="bg-indigo-600 p-1.5 rounded-lg">
+                    <i data-lucide="library" class="w-4 h-4 text-white"></i>
+                </div>
+                History
             </h2>
+            <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-800 text-slate-400">{{ count($savedTexts) }} Saved</span>
         </div>
         
-        <div class="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50/50">
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
             @forelse($savedTexts as $item)
-                <div class="group bg-white p-4 rounded-xl border border-gray-200 hover:border-indigo-300 hover:shadow-md transition-all duration-200 relative">
+                <div class="group bg-slate-800/50 hover:bg-slate-800 p-4 rounded-xl border border-slate-700/50 hover:border-indigo-500/30 transition-all duration-200 relative">
                     <div class="flex justify-between items-start mb-2">
-                        <span class="px-2 py-1 rounded-md bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border border-slate-600
+                            {{ $item->type == 'pro' ? 'bg-indigo-900/30 text-indigo-300 border-indigo-800' : '' }}
+                            {{ $item->type == 'casual' ? 'bg-emerald-900/30 text-emerald-300 border-emerald-800' : '' }}
+                            {{ $item->type == 'fix' ? 'bg-amber-900/30 text-amber-300 border-amber-800' : '' }}
+                            {{ $item->type == 'shorten' ? 'bg-purple-900/30 text-purple-300 border-purple-800' : '' }}
+                        ">
                             {{ $item->type ?? 'Draft' }}
                         </span>
                         <form action="{{ route('delete', $item->id) }}" method="POST" onsubmit="return confirm('Delete this item?');">
                             @csrf
                             @method('DELETE')
-                            <button type="submit" class="text-gray-400 hover:text-red-500 transition-colors p-1">
-                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            <button type="submit" class="text-slate-500 hover:text-red-400 transition-colors p-1 opacity-0 group-hover:opacity-100">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                             </button>
                         </form>
                     </div>
-                    <p class="text-sm text-gray-600 line-clamp-3 leading-relaxed">
+                    
+                    <p class="text-xs text-slate-400 line-clamp-2 leading-relaxed mb-3 group-hover:text-slate-200 transition-colors">
                         {{ $item->generated_text }}
                     </p>
-                    <div class="mt-3 pt-3 border-t border-gray-100 flex justify-between items-center">
-                        <span class="text-[10px] text-gray-400">{{ \Carbon\Carbon::parse($item->created_at)->diffForHumans() }}</span>
-                        <button onclick="copyText(`{{ addslashes($item->generated_text) }}`)" class="text-gray-400 hover:text-indigo-600 text-xs flex items-center gap-1">
+                    
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-700/50">
+                        <span class="text-[10px] text-slate-500">{{ \Carbon\Carbon::parse($item->created_at)->diffForHumans(null, true) }}</span>
+                        <button onclick="copyText(`{{ addslashes($item->generated_text) }}`)" class="text-slate-500 hover:text-white text-[10px] flex items-center gap-1.5 transition-colors">
                             <i data-lucide="copy" class="w-3 h-3"></i> Copy
                         </button>
                     </div>
                 </div>
             @empty
-                <div class="text-center py-10 px-6">
-                    <div class="bg-gray-100 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
-                        <i data-lucide="inbox" class="w-6 h-6 text-gray-400"></i>
+                <div class="text-center py-12 px-6">
+                    <div class="bg-slate-800 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-3">
+                        <i data-lucide="inbox" class="w-5 h-5 text-slate-600"></i>
                     </div>
-                    <p class="text-gray-500 text-sm">No saved texts yet.</p>
-                    <p class="text-gray-400 text-xs mt-1">Generate something to get started!</p>
+                    <p class="text-slate-500 text-sm">Library is empty.</p>
                 </div>
             @endforelse
         </div>
+        
+        <div class="p-4 border-t border-slate-800 bg-slate-900 text-xs text-slate-500 flex justify-between items-center">
+            <span>Logged in as {{ Auth::user()->name }}</span>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="hover:text-white transition-colors flex items-center gap-1">
+                    <i data-lucide="log-out" class="w-3 h-3"></i> Logout
+                </button>
+            </form>
+        </div>
     </div>
 
-    <div class="flex-1 flex flex-col h-2/3 md:h-full bg-gray-50 relative overflow-hidden">
-        
-        <div class="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shadow-sm z-20">
-            <h1 class="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <i data-lucide="sparkles" class="w-6 h-6 text-indigo-600 fill-indigo-100"></i>
+    <div class="flex-1 flex flex-col h-2/3 md:h-full relative overflow-hidden bg-slate-50">
+        <div class="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 z-0"></div>
+        <div class="absolute inset-0 bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 z-0"></div>
+
+        <div class="bg-white/80 backdrop-blur-md border-b border-slate-200 px-8 py-4 flex justify-between items-center z-10 sticky top-0">
+            <h1 class="text-lg font-bold text-slate-800 flex items-center gap-2.5">
+                <i data-lucide="sparkles" class="w-5 h-5 text-indigo-600 fill-indigo-100"></i>
                 AI Writer Assistant
             </h1>
-            
-            <div class="flex items-center gap-4">
-                <div class="flex items-center gap-2 text-sm text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
-                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-100">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                     System Ready
-                </div>
-                
-                <form method="POST" action="{{ route('logout') }}">
-                    @csrf
-                    <button type="submit" class="text-sm text-red-500 hover:text-red-700 font-medium flex items-center gap-1">
-                        <i data-lucide="log-out" class="w-4 h-4"></i> Logout
-                    </button>
-                </form>
+                </span>
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-6 md:p-8">
-            <div class="max-w-4xl mx-auto space-y-6">
+        <div class="flex-1 overflow-y-auto p-6 md:p-10 z-10 relative">
+            <div class="max-w-5xl mx-auto space-y-8">
                 
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                    <div class="border-b border-gray-100 bg-gray-50/50 px-4 py-3 flex items-center gap-2">
-                        <i data-lucide="pen-line" class="w-4 h-4 text-gray-400"></i>
-                        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Original Text</span>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-md transition-shadow duration-300">
+                    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <label for="inputText" class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+                            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> Input Text
+                        </label>
+                        <span class="text-xs text-slate-400">Enter your draft below</span>
                     </div>
-                    <textarea id="inputText" rows="6" class="w-full p-6 border-0 focus:ring-0 text-gray-700 placeholder-gray-300 text-base resize-none" placeholder="Type or paste your rough draft here..."></textarea>
                     
-                    <div class="px-4 py-3 bg-gray-50 border-t border-gray-100 flex flex-wrap gap-2">
-                        <button onclick="rewrite('pro')" class="action-btn flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow-sm hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md transition-all">
-                            <i data-lucide="briefcase" class="w-4 h-4"></i> Professional
-                        </button>
-                        <button onclick="rewrite('casual')" class="action-btn flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow-sm hover:border-green-300 hover:text-green-600 hover:shadow-md transition-all">
-                            <i data-lucide="coffee" class="w-4 h-4"></i> Casual
-                        </button>
-                        <button onclick="rewrite('fix')" class="action-btn flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow-sm hover:border-amber-300 hover:text-amber-600 hover:shadow-md transition-all">
-                            <i data-lucide="check-circle-2" class="w-4 h-4"></i> Fix Grammar
-                        </button>
-                        <button onclick="rewrite('shorten')" class="action-btn flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 text-sm font-medium shadow-sm hover:border-purple-300 hover:text-purple-600 hover:shadow-md transition-all">
-                            <i data-lucide="scissors" class="w-4 h-4"></i> Shorten
-                        </button>
+                    <textarea id="inputText" rows="5" class="w-full p-6 border-0 focus:ring-0 text-slate-700 placeholder:text-slate-300 text-base leading-relaxed resize-none" placeholder="Paste your rough notes or draft here to verify grammar, change tone, or summarize..."></textarea>
+                    
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-100">
+                        <p class="text-xs font-medium text-slate-400 mb-3 uppercase tracking-wider">Select Action:</p>
+                        <div class="flex flex-wrap gap-3">
+                            <button onclick="rewrite('pro')" class="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium shadow-sm hover:border-indigo-400 hover:text-indigo-600 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                                <div class="bg-indigo-50 p-1.5 rounded-lg group-hover:bg-indigo-100 transition-colors">
+                                    <i data-lucide="briefcase" class="w-4 h-4 text-indigo-600"></i>
+                                </div>
+                                Professional
+                            </button>
+                            <button onclick="rewrite('casual')" class="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium shadow-sm hover:border-emerald-400 hover:text-emerald-600 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                                <div class="bg-emerald-50 p-1.5 rounded-lg group-hover:bg-emerald-100 transition-colors">
+                                    <i data-lucide="coffee" class="w-4 h-4 text-emerald-600"></i>
+                                </div>
+                                Casual
+                            </button>
+                            <button onclick="rewrite('fix')" class="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium shadow-sm hover:border-amber-400 hover:text-amber-600 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                                <div class="bg-amber-50 p-1.5 rounded-lg group-hover:bg-amber-100 transition-colors">
+                                    <i data-lucide="check-circle-2" class="w-4 h-4 text-amber-600"></i>
+                                </div>
+                                Fix Grammar
+                            </button>
+                            <button onclick="rewrite('shorten')" class="group flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 text-slate-600 text-sm font-medium shadow-sm hover:border-purple-400 hover:text-purple-600 hover:shadow-md hover:-translate-y-0.5 transition-all">
+                                <div class="bg-purple-50 p-1.5 rounded-lg group-hover:bg-purple-100 transition-colors">
+                                    <i data-lucide="scissors" class="w-4 h-4 text-purple-600"></i>
+                                </div>
+                                Shorten
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                <div id="loadingArea" class="hidden text-center py-12">
-                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-100 border-t-indigo-600 mb-3"></div>
-                    <p class="text-gray-500 text-sm font-medium">AI is thinking...</p>
+                <div id="loadingArea" class="hidden py-12 flex flex-col items-center justify-center">
+                    <div class="relative">
+                        <div class="w-12 h-12 rounded-full border-4 border-indigo-100 animate-spin border-t-indigo-600"></div>
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i>
+                        </div>
+                    </div>
+                    <p class="text-slate-500 text-sm font-medium mt-4 animate-pulse">Generative AI is processing...</p>
                 </div>
 
-                <div id="resultArea" class="hidden bg-white rounded-2xl shadow-lg border border-indigo-100 overflow-hidden ring-1 ring-indigo-50">
-                    <div class="border-b border-indigo-50 bg-indigo-50/30 px-4 py-3 flex items-center justify-between">
-                        <div class="flex items-center gap-2">
-                            <i data-lucide="bot" class="w-4 h-4 text-indigo-500"></i>
-                            <span class="text-xs font-semibold text-indigo-600 uppercase tracking-wide">AI Generated Result</span>
+                <div id="resultArea" class="hidden bg-white rounded-2xl shadow-lg shadow-indigo-100/50 border border-indigo-100 overflow-hidden ring-1 ring-indigo-50">
+                    <div class="border-b border-indigo-50 bg-gradient-to-r from-indigo-50/50 to-white px-6 py-4 flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <div class="bg-indigo-600 p-1.5 rounded-lg shadow-sm">
+                                <i data-lucide="bot" class="w-4 h-4 text-white"></i>
+                            </div>
+                            <span class="text-sm font-bold text-indigo-900 tracking-wide">AI Suggestions</span>
                         </div>
-                        <button onclick="copyResult()" class="text-gray-400 hover:text-indigo-600 transition-colors" title="Copy All">
+                        <button onclick="copyResult()" class="text-slate-400 hover:text-indigo-600 transition-colors p-2 hover:bg-indigo-50 rounded-lg" title="Copy All">
                             <i data-lucide="copy" class="w-4 h-4"></i>
                         </button>
                     </div>
                     
-                    <div id="outputContainer" class="p-6">
+                    <div class="p-0">
                         <table class="w-full text-left border-collapse">
-                            <thead>
+                            <thead class="bg-slate-50/80 text-xs uppercase text-slate-500 font-semibold tracking-wider">
                                 <tr>
-                                    <th class="border-b-2 border-indigo-100 py-2 text-xs font-semibold text-gray-500 uppercase w-24">Option</th>
-                                    <th class="border-b-2 border-indigo-100 py-2 text-xs font-semibold text-gray-500 uppercase">Rewritten Version</th>
-                                    <th class="border-b-2 border-indigo-100 py-2 text-xs font-semibold text-gray-500 uppercase text-right w-16">Action</th>
+                                    <th class="py-4 px-6 border-b border-slate-100 w-24">Variant</th>
+                                    <th class="py-4 px-6 border-b border-slate-100">Rewritten Text</th>
+                                    <th class="py-4 px-6 border-b border-slate-100 text-right">Actions</th>
                                 </tr>
                             </thead>
-                            <tbody id="outputTableBody" class="text-sm text-gray-700">
+                            <tbody id="outputTableBody" class="text-sm text-slate-700 divide-y divide-slate-50">
                                 </tbody>
                         </table>
                     </div>
 
-                    <form id="saveForm" action="{{ route('save') }}" method="POST" class="bg-gray-50 px-6 py-4 border-t border-gray-100 flex justify-end">
+                    <form id="saveForm" action="{{ route('save') }}" method="POST" class="bg-indigo-50/30 px-6 py-4 border-t border-indigo-50 flex justify-end gap-3">
                         @csrf
                         <input type="hidden" name="original_text" id="formOriginal">
                         <input type="hidden" name="generated_text" id="formGenerated">
                         <input type="hidden" name="action" id="formAction">
-                        <button type="submit" id="saveBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                        
+                        <span class="text-xs text-slate-400 self-center mr-auto italic">
+                            * Saving will add the first option to your history.
+                        </span>
+                        
+                        <button type="submit" id="saveBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-indigo-200 hover:shadow-lg hover:translate-y-[-1px] transition-all flex items-center gap-2">
                             <i data-lucide="save" class="w-4 h-4"></i>
                             Save to Library
                         </button>
@@ -155,7 +204,6 @@
     </div>
 
     <script>
-        // Initialize Icons
         lucide.createIcons();
 
         async function rewrite(action) {
@@ -166,10 +214,9 @@
             
             if(!text) return alert('Please enter some text to rewrite.');
 
-            // Show Loading
             resultArea.classList.add('hidden');
             loadingArea.classList.remove('hidden');
-            tableBody.innerHTML = ''; // Clear previous results
+            tableBody.innerHTML = ''; 
 
             try {
                 const response = await fetch('/rewrite', {
@@ -182,33 +229,23 @@
                 });
                 
                 const data = await response.json();
-                
-                // Hide Loading
                 loadingArea.classList.add('hidden');
 
                 if(data.result) {
-                    // Try to parse the JSON returned by AI
                     let aiData;
-                    try {
-                        aiData = JSON.parse(data.result);
-                    } catch (e) {
-                        // Fallback if AI didn't return perfect JSON (rare with system prompt)
-                        aiData = { options: [data.result] };
-                    }
+                    try { aiData = JSON.parse(data.result); } 
+                    catch (e) { aiData = { options: [data.result] }; }
                     
                     const options = aiData.options || ["No result generated"];
 
-                    // Populate the Table
                     options.forEach((opt, index) => {
-                        // Escape single quotes for the onclick handler
                         const escapedOpt = opt.replace(/`/g, "\\`").replace(/"/g, "&quot;");
-                        
                         const row = `
-                            <tr class="border-b border-gray-50 hover:bg-gray-50 transition-colors group">
-                                <td class="py-4 font-medium text-indigo-600 align-top">Option ${index + 1}</td>
-                                <td class="py-4 leading-relaxed pr-4 text-gray-800">${opt}</td>
-                                <td class="py-4 text-right align-top">
-                                    <button onclick="copyText(\`${escapedOpt}\`)" class="text-gray-400 hover:text-indigo-600 p-2 rounded-md hover:bg-indigo-50 transition-colors" title="Copy">
+                            <tr class="group hover:bg-indigo-50/40 transition-colors">
+                                <td class="py-5 px-6 font-semibold text-indigo-600 align-top text-xs">OPTION 0${index + 1}</td>
+                                <td class="py-5 px-6 leading-relaxed text-slate-600 align-top">${opt}</td>
+                                <td class="py-5 px-6 text-right align-top">
+                                    <button onclick="copyText(\`${escapedOpt}\`)" class="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all" title="Copy">
                                         <i data-lucide="copy" class="w-4 h-4"></i>
                                     </button>
                                 </td>
@@ -217,13 +254,12 @@
                         tableBody.innerHTML += row;
                     });
 
-                    // Prepare the save form (We default to saving the first option)
                     document.getElementById('formOriginal').value = text;
                     document.getElementById('formGenerated').value = options[0]; 
                     document.getElementById('formAction').value = action;
                     
                     resultArea.classList.remove('hidden');
-                    lucide.createIcons(); // Re-render icons for new elements
+                    lucide.createIcons();
                 } else {
                     alert("Error: " + (data.error || "Unknown error"));
                 }
@@ -236,18 +272,16 @@
 
         function copyText(text) {
             navigator.clipboard.writeText(text);
-            // Optional: You could show a small toast notification here
         }
         
         function copyResult() {
-            // Copies all options in a clean format
             const rows = document.querySelectorAll('#outputTableBody td:nth-child(2)');
             let allText = "";
             rows.forEach((r, i) => {
                 allText += `Option ${i+1}:\n${r.innerText}\n\n`;
             });
             copyText(allText);
-            alert("All options copied to clipboard!");
+            alert("All options copied!");
         }
     </script>
 </body>
