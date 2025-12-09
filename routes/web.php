@@ -14,6 +14,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/rewrite', [AiController::class, 'rewrite']);
     Route::post('/save', [AiController::class, 'save'])->name('save');
     Route::delete('/delete/{id}', [AiController::class, 'destroy'])->name('delete');
+    Route::get('/history', [AiController::class, 'history'])->name('history');
+    Route::put('/history/{id}', [AiController::class, 'update'])->name('history.update');
 });
 
 require __DIR__.'/auth.php'; 
