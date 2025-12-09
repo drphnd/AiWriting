@@ -20,15 +20,20 @@
 <body class="h-full flex flex-col md:flex-row overflow-hidden bg-white">
 
     <div class="w-full md:w-80 bg-slate-900 text-slate-300 flex flex-col h-1/3 md:h-full flex-shrink-0 shadow-xl z-20">
-        <div class="p-6 border-b border-slate-800 bg-slate-900 z-10 flex justify-between items-center">
-            <h2 class="font-bold text-white tracking-tight flex items-center gap-3">
-                <div class="bg-indigo-600 p-1.5 rounded-lg">
-                    <i data-lucide="library" class="w-4 h-4 text-white"></i>
-                </div>
-                History
-            </h2>
-            <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-800 text-slate-400">{{ count($savedTexts) }} Saved</span>
+       <div class="p-6 border-b border-slate-800 bg-slate-900 z-10 flex justify-between items-center">
+    <a href="{{ route('history') }}" class="group flex items-center gap-3 cursor-pointer">
+        <div class="bg-indigo-600 p-1.5 rounded-lg group-hover:bg-indigo-500 transition-colors">
+            <i data-lucide="library" class="w-4 h-4 text-white"></i>
         </div>
+        <div class="flex flex-col">
+            <h2 class="font-bold text-white tracking-tight text-sm group-hover:text-indigo-300 transition-colors flex items-center gap-2">
+                History
+                <i data-lucide="external-link" class="w-3 h-3 text-slate-500 group-hover:text-indigo-400"></i>
+            </h2>
+        </div>
+    </a>
+    <span class="text-xs font-medium px-2 py-1 rounded-full bg-slate-800 text-slate-400">{{ count($savedTexts) }} Saved</span>
+</div>
         
         <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
             @forelse($savedTexts as $item)
