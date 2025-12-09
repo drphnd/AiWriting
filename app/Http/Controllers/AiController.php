@@ -102,7 +102,52 @@ class AiController extends Controller
 
         return redirect()->back();
     }
+// Show History with Filters
+    public function history(Request $request)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
 
+        $query = DB::table('saved_texts')
+            ->where('user_id', Auth::id())
+            ->orderBy('created_at', 'desc');
+
+        // Apply Filter if present
+        if ($request->has('filter') && $request->filter != 'all') {
+            $query->where('type', $request->filter);
+        }
+
+        $savedTexts = $query->get();
+
+        return view('history', [
+            'savedTexts' => $savedTexts, 
+            'currentFilter' => $request->filter ?? 'all'
+        ]);
+    }
+
+    // Update an existing Saved Text
+    public function update(Request $request, $id)
+    {
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
+
+        $request->validate([
+            'generated_text' => 'required|string',
+        ]);
+
+        DB::table('saved_texts')
+            ->where('id', $id)
+            ->where('user_id', Auth::id()) // Security: ensure it belongs to user
+            ->update([
+                'generated_text' => $request->generated_text,
+                'updated_at' => now(),
+            ]);
+
+        return redirect()->route('history', ['filter' => $request->filter])
+            ->with('status', 'Text updated successfully!');
+    }
     // Delete from Database
     public function destroy($id)
     {
