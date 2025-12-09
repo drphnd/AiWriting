@@ -11,7 +11,6 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Inter', sans-serif; }
         
-        /* Custom Scrollbar for Sidebar */
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
@@ -172,6 +171,7 @@
                         <table class="w-full text-left border-collapse">
                             <thead class="bg-slate-50/80 text-xs uppercase text-slate-500 font-semibold tracking-wider">
                                 <tr>
+                                    <th class="py-4 px-6 border-b border-slate-100 w-16 text-center">Pick</th>
                                     <th class="py-4 px-6 border-b border-slate-100 w-24">Variant</th>
                                     <th class="py-4 px-6 border-b border-slate-100">Rewritten Text</th>
                                     <th class="py-4 px-6 border-b border-slate-100 text-right">Actions</th>
@@ -188,13 +188,13 @@
                         <input type="hidden" name="generated_text" id="formGenerated">
                         <input type="hidden" name="action" id="formAction">
                         
-                        <span class="text-xs text-slate-400 self-center mr-auto italic">
-                            * Saving will add the first option to your history.
+                        <span class="text-xs text-slate-400 self-center mr-auto italic flex items-center gap-1.5">
+                            <i data-lucide="info" class="w-3 h-3"></i> Select the version you want to keep.
                         </span>
                         
                         <button type="submit" id="saveBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-indigo-200 hover:shadow-lg hover:translate-y-[-1px] transition-all flex items-center gap-2">
                             <i data-lucide="save" class="w-4 h-4"></i>
-                            Save to Library
+                            Save Selected to Library
                         </button>
                     </form>
                 </div>
@@ -205,6 +205,7 @@
 
     <script>
         lucide.createIcons();
+        let currentOptions = []; // Store generated text options globally
 
         async function rewrite(action) {
             const text = document.getElementById('inputText').value;
@@ -217,6 +218,7 @@
             resultArea.classList.add('hidden');
             loadingArea.classList.remove('hidden');
             tableBody.innerHTML = ''; 
+            currentOptions = []; // Reset options
 
             try {
                 const response = await fetch('/rewrite', {
@@ -236,16 +238,24 @@
                     try { aiData = JSON.parse(data.result); } 
                     catch (e) { aiData = { options: [data.result] }; }
                     
-                    const options = aiData.options || ["No result generated"];
+                    currentOptions = aiData.options || ["No result generated"];
 
-                    options.forEach((opt, index) => {
+                    currentOptions.forEach((opt, index) => {
+                        // Safe escaping for the copy button logic, not needed for save logic anymore
                         const escapedOpt = opt.replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                        
                         const row = `
-                            <tr class="group hover:bg-indigo-50/40 transition-colors">
-                                <td class="py-5 px-6 font-semibold text-indigo-600 align-top text-xs">OPTION 0${index + 1}</td>
+                            <tr class="group hover:bg-indigo-50/40 transition-colors cursor-pointer" onclick="selectOption(${index})">
+                                <td class="py-5 px-6 align-top text-center">
+                                    <div class="mt-1">
+                                        <input type="radio" name="text_choice" id="opt_radio_${index}" 
+                                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-600 cursor-pointer accent-indigo-600">
+                                    </div>
+                                </td>
+                                <td class="py-5 px-6 font-semibold text-indigo-600 align-top text-xs pt-6">OPTION 0${index + 1}</td>
                                 <td class="py-5 px-6 leading-relaxed text-slate-600 align-top">${opt}</td>
                                 <td class="py-5 px-6 text-right align-top">
-                                    <button onclick="copyText(\`${escapedOpt}\`)" class="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all" title="Copy">
+                                    <button onclick="event.stopPropagation(); copyText(\`${escapedOpt}\`)" class="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all" title="Copy">
                                         <i data-lucide="copy" class="w-4 h-4"></i>
                                     </button>
                                 </td>
@@ -254,9 +264,14 @@
                         tableBody.innerHTML += row;
                     });
 
+                    // Update form metadata
                     document.getElementById('formOriginal').value = text;
-                    document.getElementById('formGenerated').value = options[0]; 
                     document.getElementById('formAction').value = action;
+                    
+                    // Select the first option by default
+                    if(currentOptions.length > 0) {
+                        selectOption(0);
+                    }
                     
                     resultArea.classList.remove('hidden');
                     lucide.createIcons();
@@ -270,15 +285,24 @@
             }
         }
 
+        // New function to handle selection
+        function selectOption(index) {
+            // 1. Visually check the radio button
+            const radio = document.getElementById('opt_radio_' + index);
+            if(radio) radio.checked = true;
+
+            // 2. Update the hidden input for the Save Form
+            document.getElementById('formGenerated').value = currentOptions[index];
+        }
+
         function copyText(text) {
             navigator.clipboard.writeText(text);
         }
         
         function copyResult() {
-            const rows = document.querySelectorAll('#outputTableBody td:nth-child(2)');
             let allText = "";
-            rows.forEach((r, i) => {
-                allText += `Option ${i+1}:\n${r.innerText}\n\n`;
+            currentOptions.forEach((opt, i) => {
+                allText += `Option ${i+1}:\n${opt}\n\n`;
             });
             copyText(allText);
             alert("All options copied!");
