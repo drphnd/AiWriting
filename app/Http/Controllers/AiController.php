@@ -5,16 +5,22 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class AiController extends Controller
 {
-    // Display the app and list saved items
+    // Display the app and list saved items for the CURRENT USER
     public function index()
     {
-        // Fetch saved texts from the database
-        // We use try-catch to prevent crashing if the table is missing
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
+
         try {
-            $savedTexts = DB::table('saved_texts')->orderBy('created_at', 'desc')->get();
+            $savedTexts = DB::table('saved_texts')
+                ->where('user_id', Auth::id()) // Filter by user
+                ->orderBy('created_at', 'desc')
+                ->get();
         } catch (\Exception $e) {
             $savedTexts = [];
         }
@@ -22,7 +28,7 @@ class AiController extends Controller
         return view('ai-app', ['savedTexts' => $savedTexts]);
     }
 
-    // Call Gemini API
+    // Call Gemini API with STRICT JSON format
     public function rewrite(Request $request)
     {
         $request->validate([
@@ -30,55 +36,68 @@ class AiController extends Controller
             'action' => 'required|string',
         ]);
 
-        // GET KEY FROM ENV (Server-side secure)
         $apiKey = env('GEMINI_API_KEY');
 
         if (!$apiKey) {
-            return response()->json(['error' => 'API Key not configured on server.'], 500);
+            return response()->json(['error' => 'API Key not configured.'], 500);
         }
 
-        $prompts = [
-            'pro' => "Rewrite this to be professional and polite for a business context:",
-            'casual' => "Rewrite this to be casual and friendly:",
-            'fix' => "Fix grammar and spelling only:",
-            'shorten' => "Make this concise and remove filler words:",
-        ];
+        // Strict System Instruction for Professional Paraphrasing
+        $baseInstruction = "You are a strict text rewriting engine. 
+        - You DO NOT converse with the user. 
+        - You DO NOT answer questions. 
+        - You ONLY output the rewritten text in valid JSON format.
+        - Your output must be a JSON object with a key 'options' containing an array of 2 distinct variations.";
 
-        $systemPrompt = $prompts[$request->action] ?? "Rewrite this text:";
-        
+        $specificPrompt = match($request->action) {
+            'pro' => "Rewrite the text to be professional, polite, and suitable for business communications.",
+            'casual' => "Rewrite the text to be casual, friendly, and easy to read.",
+            'fix' => "Correct all grammar, spelling, and punctuation errors without changing the tone.",
+            'shorten' => "Concisely summarize the text, removing filler words.",
+            default => "Rewrite the text clearly."
+        };
+
         // Call Google Gemini API
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key={$apiKey}", [
             'contents' => [
-                ['parts' => [['text' => $request->text]]]
+                ['parts' => [['text' => "Original Text: " . $request->text]]]
             ],
             'systemInstruction' => [
-                'parts' => [['text' => $systemPrompt]]
+                'parts' => [['text' => $baseInstruction . " " . $specificPrompt]]
+            ],
+            'generationConfig' => [
+                'response_mime_type' => 'application/json' // FORCE JSON
             ]
         ]);
 
         if ($response->successful()) {
-            $generatedText = $response->json('candidates.0.content.parts.0.text');
-            return response()->json(['result' => $generatedText]);
+            $rawJson = $response->json('candidates.0.content.parts.0.text');
+            return response()->json(['result' => $rawJson]); // Return the JSON string directly
         }
 
         return response()->json(['error' => 'API Call Failed: ' . $response->body()], 500);
     }
 
-    // Save to Database
+    // Save to Database with User ID
     public function save(Request $request)
     {
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
+
         try {
             DB::table('saved_texts')->insert([
+                'user_id' => Auth::id(), // Save the User ID
                 'original_text' => $request->original_text,
-                'generated_text' => $request->generated_text,
+                'generated_text' => $request->generated_text, // This will now be a clean string
                 'type' => $request->action,
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Failed to save: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to save.');
         }
 
         return redirect()->back();
@@ -87,7 +106,15 @@ class AiController extends Controller
     // Delete from Database
     public function destroy($id)
     {
-        DB::table('saved_texts')->where('id', $id)->delete();
+        if (!Auth::check()) {
+            return redirect()->route('login');
+        }
+
+        DB::table('saved_texts')
+            ->where('id', $id)
+            ->where('user_id', Auth::id()) // Ensure user can only delete their own
+            ->delete();
+            
         return redirect()->back();
     }
 }
