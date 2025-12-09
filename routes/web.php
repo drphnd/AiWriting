@@ -1,16 +1,20 @@
 <?php
 
-use App\Http\Controllers\AiController;
+use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
-// 1. Show the App (fetches saved history from DB)
-Route::get('/', [AiController::class, 'index']);
+Route::get('/', function () {
+    return view('welcome');
+});
 
-// 2. Rewrite Text (calls Gemini API)
-Route::post('/rewrite', [AiController::class, 'rewrite']);
+Route::get('/dashboard', function () {
+    return view('dashboard');
+})->middleware(['auth', 'verified'])->name('dashboard');
 
-// 3. Save to Database
-Route::post('/save', [AiController::class, 'save'])->name('save');
+Route::middleware('auth')->group(function () {
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
-// 4. Delete from Database
-Route::delete('/delete/{id}', [AiController::class, 'destroy'])->name('delete');
+require __DIR__.'/auth.php';
