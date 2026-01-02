@@ -1,3 +1,5 @@
+{{-- resources/views/auth/login.blade.php --}}
+
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
