@@ -3,12 +3,22 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Kreait\Firebase\Contract\Database;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
 
 class AiController extends Controller
 {
+    protected $database;
+    protected $tablename = 'saved_texts';
+
+    // Inject Firebase Database Service
+    public function __construct(Database $database)
+    {
+        $this->database = $database;
+    }
+
     /**
      * Display the AI app for the authenticated user
      */
@@ -19,10 +29,25 @@ class AiController extends Controller
         }
 
         try {
-            $savedTexts = DB::table('saved_texts')
-                ->where('user_id', Auth::id())
-                ->orderBy('created_at', 'desc')
-                ->get();
+            // Ambil referensi ke table 'saved_texts'
+            $reference = $this->database->getReference($this->tablename);
+            
+            // Ambil semua data (Firebase filtering agak terbatas, kita filter di PHP)
+            $snapshot = $reference->orderByChild('user_id')->equalTo(Auth::id())->getSnapshot();
+            $value = $snapshot->getValue();
+
+            $savedTexts = [];
+            if ($value) {
+                // Konversi array Firebase ke Collection Laravel agar mudah di-sort
+                $savedTexts = collect($value)
+                    ->map(function ($item, $key) {
+                        $item['id'] = $key; // Simpan key Firebase sebagai ID
+                        return (object) $item;
+                    })
+                    ->sortByDesc('created_at') // Sort manual karena Firebase sort menimpa filter
+                    ->values();
+            }
+
         } catch (\Exception $e) {
             $savedTexts = [];
         }
@@ -31,7 +56,7 @@ class AiController extends Controller
     }
 
     /**
-     * Call Gemini API to rewrite text
+     * Call Gemini API to rewrite text (Tidak berubah)
      */
     public function rewrite(Request $request)
     {
@@ -47,9 +72,6 @@ class AiController extends Controller
             return response()->json(['error' => 'API Key not configured.'], 500);
         }
 
-        /**
-         * STRICT SYSTEM INSTRUCTION
-         */
         $baseInstruction = "You are a strict text rewriting engine.
         - You DO NOT converse with the user.
         - You DO NOT answer questions.
@@ -58,16 +80,9 @@ class AiController extends Controller
         - If a word limit is specified, you MUST obey it strictly.
         - NEVER exceed the requested word limit.";
 
-        /**
-         * ACTION-SPECIFIC PROMPT
-         */
         if ($request->action === 'shorten') {
             $limit = $request->word_limit ?? 20;
-
-            $specificPrompt = "Summarize the text in {$limit} words or fewer.
-            - NEVER exceed {$limit} words.
-            - Be concise and clear.
-            - Preserve the core meaning.";
+            $specificPrompt = "Summarize the text in {$limit} words or fewer. - NEVER exceed {$limit} words. - Be concise and clear. - Preserve the core meaning.";
         } else {
             $specificPrompt = match ($request->action) {
                 'pro' => "Rewrite the text to be professional, polite, and suitable for business communications.",
@@ -76,30 +91,18 @@ class AiController extends Controller
                 default => "Rewrite the text clearly."
             };
         }
-
-        /**
-         * Gemini API Call
-         */
+        /** @var Response $response */
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key={$apiKey}",
+            // GANTI URL MENJADI INI:
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$apiKey}",
             [
-                'contents' => [
-                    [
-                        'parts' => [
-                            ['text' => "Original Text: " . $request->text]
-                        ]
-                    ]
-                ],
+                'contents' => [['parts' => [['text' => "Original Text: " . $request->text]]]],
                 'systemInstruction' => [
-                    'parts' => [
-                        ['text' => $baseInstruction . "\n\n" . $specificPrompt]
-                    ]
+                    'parts' => [['text' => $baseInstruction . "\n\n" . $specificPrompt]]
                 ],
-                'generationConfig' => [
-                    'response_mime_type' => 'application/json'
-                ]
+                'generationConfig' => ['response_mime_type' => 'application/json']
             ]
         );
 
@@ -108,13 +111,11 @@ class AiController extends Controller
             return response()->json(['result' => $rawJson]);
         }
 
-        return response()->json([
-            'error' => 'API Call Failed: ' . $response->body()
-        ], 500);
+        return response()->json(['error' => 'API Call Failed: ' . $response->body()], 500);
     }
 
     /**
-     * Save selected text to database
+     * Save selected text to Firebase
      */
     public function save(Request $request)
     {
@@ -123,16 +124,20 @@ class AiController extends Controller
         }
 
         try {
-            DB::table('saved_texts')->insert([
+            $this->database->getReference($this->tablename)->push([
                 'user_id'        => Auth::id(),
                 'original_text'  => $request->original_text,
                 'generated_text' => $request->generated_text,
                 'type'           => $request->action,
-                'created_at'     => now(),
-                'updated_at'     => now(),
+                'created_at'     => now()->toIso8601String(),
+                'updated_at'     => now()->toIso8601String(),
             ]);
+            
+            // Hapus baris return "SUKSES..." dan dd()
+            
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Failed to save.');
+            // Kembalikan ke redirect error
+             return redirect()->back()->with('error', 'Failed to save: ' . $e->getMessage());
         }
 
         return redirect()->back();
@@ -147,22 +152,30 @@ class AiController extends Controller
             return redirect()->route('login');
         }
 
-        $query = DB::table('saved_texts')
-            ->where('user_id', Auth::id())
-            ->orderBy('created_at', 'desc');
+        $reference = $this->database->getReference($this->tablename);
+        $snapshot = $reference->orderByChild('user_id')->equalTo(Auth::id())->getSnapshot();
+        $value = $snapshot->getValue();
+        
+        $savedTexts = collect($value ?: [])
+            ->map(function ($item, $key) {
+                $item['id'] = $key;
+                return (object) $item;
+            })
+            ->sortByDesc('created_at');
 
+        // Filter manual menggunakan Collection Laravel
         if ($request->has('filter') && $request->filter !== 'all') {
-            $query->where('type', $request->filter);
+            $savedTexts = $savedTexts->where('type', $request->filter);
         }
 
         return view('history', [
-            'savedTexts'    => $query->get(),
+            'savedTexts'    => $savedTexts->values(), // Reset keys agar rapi di view
             'currentFilter' => $request->filter ?? 'all',
         ]);
     }
 
     /**
-     * Update an existing saved text
+     * Update an existing saved text in Firebase
      */
     public function update(Request $request, $id)
     {
@@ -170,17 +183,13 @@ class AiController extends Controller
             return redirect()->route('login');
         }
 
-        $request->validate([
-            'generated_text' => 'required|string',
-        ]);
+        $request->validate(['generated_text' => 'required|string']);
 
-        DB::table('saved_texts')
-            ->where('id', $id)
-            ->where('user_id', Auth::id())
-            ->update([
-                'generated_text' => $request->generated_text,
-                'updated_at'     => now(),
-            ]);
+        // Update node spesifik berdasarkan ID (key)
+        $this->database->getReference($this->tablename . '/' . $id)->update([
+            'generated_text' => $request->generated_text,
+            'updated_at'     => now()->toIso8601String(),
+        ]);
 
         return redirect()
             ->route('history', ['filter' => $request->filter])
@@ -188,7 +197,7 @@ class AiController extends Controller
     }
 
     /**
-     * Delete a saved text
+     * Delete a saved text from Firebase
      */
     public function destroy($id)
     {
@@ -196,10 +205,8 @@ class AiController extends Controller
             return redirect()->route('login');
         }
 
-        DB::table('saved_texts')
-            ->where('id', $id)
-            ->where('user_id', Auth::id())
-            ->delete();
+        // Hapus node berdasarkan ID
+        $this->database->getReference($this->tablename . '/' . $id)->remove();
 
         return redirect()->back();
     }
