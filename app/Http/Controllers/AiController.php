@@ -41,6 +41,20 @@ class AiController extends Controller
             'word_limit' => 'nullable|integer|min:1|max:500',
         ]);
 
+        // ⛔ Backend safety check for shorten
+        if ($request->action === 'shorten') {
+            $limit = $request->word_limit ?? 20;
+
+            // Count words in the original input text
+            $originalWordCount = str_word_count(strip_tags($request->text));
+
+            if ($limit >= $originalWordCount) {
+                return response()->json([
+                    'error' => "Word limit ({$limit}) must be less than original text length ({$originalWordCount})."
+                ], 422);
+            }
+        }
+
         $apiKey = env('GEMINI_API_KEY');
 
         if (!$apiKey) {

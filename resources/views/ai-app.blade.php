@@ -147,7 +147,12 @@
                             class="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
                             <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> Input Text
                         </label>
-                        <span class="text-xs text-slate-400">Enter your draft below</span>
+
+                        <div class="flex items-center gap-3 text-xs text-slate-400">
+                            <span id="wordCounter">0 words</span>
+                            <span class="text-slate-300">•</span>
+                            <span>Enter your draft below</span>
+                        </div>
                     </div>
 
                     <textarea id="inputText" rows="5"
@@ -193,7 +198,8 @@
 
                 <div id="loadingArea" class="hidden py-12 flex flex-col items-center justify-center">
                     <div class="relative">
-                        <div class="w-12 h-12 rounded-full border-4 border-indigo-100 animate-spin border-t-indigo-600">
+                        <div
+                            class="w-12 h-12 rounded-full border-4 border-indigo-100 animate-spin border-t-indigo-600">
                         </div>
                         <div class="absolute inset-0 flex items-center justify-center">
                             <i data-lucide="sparkles" class="w-4 h-4 text-indigo-600"></i>
@@ -409,10 +415,44 @@
         }
 
         function confirmShorten() {
-            const limit = document.getElementById('shortenLimit').value;
+            const limit = parseInt(document.getElementById('shortenLimit').value, 10);
+            const text = document.getElementById('inputText').value;
+
+            if (!text.trim()) {
+                alert('Please enter text first.');
+                return;
+            }
+
+            const originalWordCount = getWordCount(text);
+
+            if (limit >= originalWordCount) {
+                alert(
+                    `Shorten limit must be LESS than the original text length.\n\n` +
+                    `Original text: ${originalWordCount} words\n` +
+                    `Requested shorten: ${limit} words`
+                );
+                return;
+            }
+
             closeShortenModal();
             rewrite('shorten', limit);
         }
+
+        function getWordCount(text) {
+            return text
+                .trim()
+                .split(/\s+/)
+                .filter(word => word.length > 0)
+                .length;
+        }
+
+        const inputTextArea = document.getElementById('inputText');
+        const wordCounter = document.getElementById('wordCounter');
+
+        inputTextArea.addEventListener('input', () => {
+            const count = getWordCount(inputTextArea.value);
+            wordCounter.textContent = `${count} word${count === 1 ? '' : 's'}`;
+        });
     </script>
 </body>
 
