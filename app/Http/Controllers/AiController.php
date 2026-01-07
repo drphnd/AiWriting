@@ -31,7 +31,7 @@ class AiController extends Controller
         try {
             // Ambil referensi ke table 'saved_texts'
             $reference = $this->database->getReference($this->tablename);
-
+            
             // Ambil semua data (Firebase filtering agak terbatas, kita filter di PHP)
             $snapshot = $reference->orderByChild('user_id')->equalTo(Auth::id())->getSnapshot();
             $value = $snapshot->getValue();
@@ -47,6 +47,7 @@ class AiController extends Controller
                     ->sortByDesc('created_at') // Sort manual karena Firebase sort menimpa filter
                     ->values();
             }
+
         } catch (\Exception $e) {
             $savedTexts = [];
         }
@@ -65,8 +66,11 @@ class AiController extends Controller
             'word_limit' => 'nullable|integer|min:1|max:500',
         ]);
 
+        // ⛔ Backend safety check for shorten
         if ($request->action === 'shorten') {
             $limit = $request->word_limit ?? 20;
+
+            // Count words in the original input text
             $originalWordCount = str_word_count(strip_tags($request->text));
 
             if ($limit >= $originalWordCount) {
@@ -77,67 +81,51 @@ class AiController extends Controller
         }
 
         $apiKey = env('GEMINI_API_KEY');
+
         if (!$apiKey) {
             return response()->json(['error' => 'API Key not configured.'], 500);
         }
 
-        $limit = $request->word_limit ?? null;
+        $baseInstruction = "You are a strict text rewriting engine.
+        - You DO NOT converse with the user.
+        - You DO NOT answer questions.
+        - You ONLY output the rewritten text in valid JSON format.
+        - Your output must be a JSON object with a key 'options' containing an array of 2 distinct variations.
+        - If a word limit is specified, you MUST obey it strictly.
+        - NEVER exceed the requested word limit.";
 
-        $prompt = match ($request->action) {
-            'pro'     => 'Rewrite the following text in a professional and polite business tone.',
-            'casual'  => 'Rewrite the following text in a casual and friendly tone.',
-            'fix'     => 'Fix grammar and spelling errors without changing tone.',
-            'shorten' => "Rewrite the following text to {$limit} words or fewer.",
-            default   => 'Rewrite the following text clearly.'
-        };
-
-        $responseSchema = [
-            'type' => 'object',
-            'properties' => [
-                'options' => [
-                    'type' => 'array',
-                    'items' => ['type' => 'string'],
-                    'minItems' => 2,
-                    'maxItems' => 2,
-                ],
-            ],
-            'required' => ['options'],
-        ];
-
+        if ($request->action === 'shorten') {
+            $limit = $request->word_limit ?? 20;
+            $specificPrompt = "Summarize the text in {$limit} words or fewer. - NEVER exceed {$limit} words. - Be concise and clear. - Preserve the core meaning.";
+        } else {
+            $specificPrompt = match ($request->action) {
+                'pro' => "Rewrite the text to be professional, polite, and suitable for business communications.",
+                'casual' => "Rewrite the text to be casual, friendly, and easy to read.",
+                'fix' => "Correct all grammar, spelling, and punctuation errors without changing the tone.",
+                default => "Rewrite the text clearly."
+            };
+        }
+        /** @var Response $response */
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
+            // GANTI URL MENJADI INI:
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$apiKey}",
             [
-                'contents' => [[
-                    'role' => 'user',
-                    'parts' => [[
-                        'text' => "{$prompt}\n\nText:\n{$request->text}"
-                    ]]
-                ]],
-                'generationConfig' => [
-                    'responseMimeType' => 'application/json',
-                    'responseJsonSchema' => $responseSchema
-                ]
+                'contents' => [['parts' => [['text' => "Original Text: " . $request->text]]]],
+                'systemInstruction' => [
+                    'parts' => [['text' => $baseInstruction . "\n\n" . $specificPrompt]]
+                ],
+                'generationConfig' => ['response_mime_type' => 'application/json']
             ]
         );
 
-        if (!$response->successful()) {
-            return response()->json([
-                'error' => 'API call failed',
-                'details' => $response->body()
-            ], 500);
+        if ($response->successful()) {
+            $rawJson = $response->json('candidates.0.content.parts.0.text');
+            return response()->json(['result' => $rawJson]);
         }
 
-        $result = $response->json('candidates.0.content.parts.0');
-
-        if (isset($result['text'])) {
-            $result = json_decode($result['text'], true);
-        }
-
-        return response()->json([
-            'result' => $result
-        ]);
+        return response()->json(['error' => 'API Call Failed: ' . $response->body()], 500);
     }
 
     /**
@@ -158,12 +146,12 @@ class AiController extends Controller
                 'created_at'     => now()->toIso8601String(),
                 'updated_at'     => now()->toIso8601String(),
             ]);
-
+            
             // Hapus baris return "SUKSES..." dan dd()
-
+            
         } catch (\Exception $e) {
             // Kembalikan ke redirect error
-            return redirect()->back()->with('error', 'Failed to save: ' . $e->getMessage());
+             return redirect()->back()->with('error', 'Failed to save: ' . $e->getMessage());
         }
 
         return redirect()->back();
@@ -181,7 +169,7 @@ class AiController extends Controller
         $reference = $this->database->getReference($this->tablename);
         $snapshot = $reference->orderByChild('user_id')->equalTo(Auth::id())->getSnapshot();
         $value = $snapshot->getValue();
-
+        
         $savedTexts = collect($value ?: [])
             ->map(function ($item, $key) {
                 $item['id'] = $key;
