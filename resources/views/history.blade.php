@@ -137,9 +137,7 @@
                                     <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
                                         <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Original
                                     </h3>
-                                    <div class="flex-grow p-4 bg-slate-50 rounded-xl text-slate-600 text-sm whitespace-pre-wrap border border-slate-100 leading-relaxed font-medium">
-                                        {{ $text->original_text }}
-                                    </div>
+                                    <div class="flex-grow p-4 bg-slate-50 rounded-xl text-slate-600 text-sm whitespace-pre-wrap border border-slate-100 leading-relaxed font-medium">{{ trim($text->original_text) }}</div>
                                 </div>
 
                                 <div class="flex flex-col">
