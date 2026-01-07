@@ -13,51 +13,39 @@ class AiController extends Controller
     protected Database $database;
     protected string $tablename = 'saved_texts';
 
-    /**
-     * Inject Firebase Database Service
-     */
     public function __construct(Database $database)
     {
         $this->database = $database;
     }
 
-    /**
-     * Display the AI app for the authenticated user
-     */
     public function index()
     {
         if (!Auth::check()) {
             return redirect()->route('login');
         }
 
-        try {
-            $reference = $this->database->getReference($this->tablename);
+        $savedTexts = collect();
 
-            $snapshot = $reference
+        try {
+            $snapshot = $this->database
+                ->getReference($this->tablename)
                 ->orderByChild('user_id')
                 ->equalTo(Auth::id())
                 ->getSnapshot();
 
-            $value = $snapshot->getValue();
-
-            $savedTexts = collect($value ?: [])
+            $savedTexts = collect($snapshot->getValue() ?: [])
                 ->map(function ($item, $key) {
                     $item['id'] = $key;
                     return (object) $item;
                 })
                 ->sortByDesc('created_at')
                 ->values();
-
         } catch (\Exception $e) {
-            $savedTexts = collect();
         }
 
         return view('ai-app', ['savedTexts' => $savedTexts]);
     }
 
-    /**
-     * Rewrite text using Gemini (Structured Output)
-     */
     public function rewrite(Request $request)
     {
         $request->validate([
@@ -66,38 +54,27 @@ class AiController extends Controller
             'word_limit' => 'nullable|integer|min:1|max:500',
         ]);
 
-        // Safety check for shorten
         if ($request->action === 'shorten') {
             $limit = $request->word_limit ?? 20;
-            $originalWordCount = str_word_count(strip_tags($request->text));
+            $count = str_word_count(strip_tags($request->text));
 
-            if ($limit >= $originalWordCount) {
-                return response()->json([
-                    'error' => "Word limit ({$limit}) must be less than original text length ({$originalWordCount})."
-                ], 422);
+            if ($limit >= $count) {
+                return response()->json(['error' => 'Invalid word limit'], 422);
             }
         }
 
-        $apiKey = env('GEMINI_API_KEY');
-
-        if (!$apiKey) {
-            return response()->json(['error' => 'API Key not configured.'], 500);
-        }
-
-        // ---- Instruction logic ----
         $instruction = match ($request->action) {
-            'pro'     => 'Rewrite the text to be professional, polite, and suitable for business communication.',
-            'casual'  => 'Rewrite the text to be casual, friendly, and easy to read.',
-            'fix'     => 'Fix grammar, spelling, and punctuation without changing tone.',
-            'shorten' => 'Summarize the text clearly while preserving the core meaning.',
-            default   => 'Rewrite the text clearly.',
+            'pro'     => 'Rewrite professionally.',
+            'casual'  => 'Rewrite casually.',
+            'fix'     => 'Fix grammar only.',
+            'shorten' => 'Summarize clearly.',
+            default   => 'Rewrite clearly.',
         };
 
         if ($request->action === 'shorten') {
-            $instruction .= " Limit the output to {$request->word_limit} words or fewer.";
+            $instruction .= " Limit to {$request->word_limit} words.";
         }
 
-        // ---- Gemini Structured Output Schema ----
         $schema = [
             'type' => 'object',
             'properties' => [
@@ -108,10 +85,7 @@ class AiController extends Controller
                     'items' => [
                         'type' => 'object',
                         'properties' => [
-                            'text' => [
-                                'type' => 'string',
-                                'description' => 'Rewritten version of the input text',
-                            ],
+                            'text' => ['type' => 'string'],
                         ],
                         'required' => ['text'],
                     ],
@@ -121,70 +95,44 @@ class AiController extends Controller
         ];
 
         /** @var Response $response */
-        $response = Http::withHeaders([
-            'Content-Type' => 'application/json',
-        ])->post(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
+        $response = Http::post(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . env('GEMINI_API_KEY'),
             [
-                'contents' => [
-                    [
-                        'role' => 'user',
-                        'parts' => [
-                            ['text' => $request->text],
-                        ],
-                    ],
-                ],
+                'contents' => [[
+                    'role' => 'user',
+                    'parts' => [['text' => $request->text]],
+                ]],
                 'systemInstruction' => [
-                    'parts' => [
-                        ['text' => $instruction],
-                    ],
+                    'parts' => [['text' => $instruction]],
                 ],
                 'generationConfig' => [
                     'response_mime_type' => 'application/json',
-                    'response_schema'    => $schema,
-                    'temperature'        => 0.3,
+                    'response_schema' => $schema,
                 ],
             ]
         );
 
         if (!$response->successful()) {
-            return response()->json([
-                'error'   => 'Gemini API error',
-                'details'=> $response->body(),
-            ], 500);
+            return response()->json(['error' => 'Gemini error'], 500);
         }
 
-        $structuredJson = $response->json('candidates.0.content.parts.0.text');
-
         return response()->json([
-            'result' => json_decode($structuredJson, true),
+            'result' => json_decode(
+                $response->json('candidates.0.content.parts.0.text'),
+                true
+            ),
         ]);
     }
 
-    /**
-     * Save generated text to Firebase
-     */
     public function save(Request $request)
     {
-        if (!Auth::check()) {
-            return redirect()->route('login');
-        }
-
-        try {
-            $this->database->getReference($this->tablename)->push([
-                'user_id'        => Auth::id(),
-                'original_text'  => $request->original_text,
-                'generated_text' => $request->generated_text,
-                'type'           => $request->action,
-                'created_at'     => now()->toIso8601String(),
-                'updated_at'     => now()->toIso8601String(),
-            ]);
-
-        } catch (\Exception $e) {
-            return redirect()
-                ->back()
-                ->with('error', 'Failed to save: ' . $e->getMessage());
-        }
+        $this->database->getReference($this->tablename)->push([
+            'user_id'        => Auth::id(),
+            'original_text'  => $request->original_text,
+            'generated_text' => $request->generated_text,
+            'type'           => $request->action,
+            'created_at'     => now()->toIso8601String(),
+        ]);
 
         return redirect()->back();
     }
