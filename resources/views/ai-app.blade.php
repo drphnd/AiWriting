@@ -292,23 +292,23 @@
 
     <script>
         lucide.createIcons();
-
-        let currentOptions = [];
+        let currentOptions = []; // Store generated text options globally
 
         async function rewrite(action, wordLimit = null) {
             const text = document.getElementById('inputText').value;
-            const loadingArea = document.getElementById('loadingArea');
             const resultArea = document.getElementById('resultArea');
+            const loadingArea = document.getElementById('loadingArea');
             const tableBody = document.getElementById('outputTableBody');
 
-            if (!text.trim()) return alert("Enter text first");
+            if (!text) return alert('Please enter some text to rewrite.');
 
-            loadingArea.classList.remove('hidden');
             resultArea.classList.add('hidden');
+            loadingArea.classList.remove('hidden');
             tableBody.innerHTML = '';
+            currentOptions = []; // Reset options
 
             try {
-                const res = await fetch("{{ route('ai.rewrite') }}", {
+                const response = await fetch('/rewrite', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -321,49 +321,74 @@
                     })
                 });
 
-                const data = await res.json();
+                const data = await response.json();
                 loadingArea.classList.add('hidden');
 
-                if (!data.result || !data.result.options) {
-                    throw new Error("Invalid AI response");
+                if (data.result) {
+                    let aiData;
+                    try {
+                        aiData = JSON.parse(data.result);
+                    } catch (e) {
+                        aiData = {
+                            options: [data.result]
+                        };
+                    }
+
+                    currentOptions = aiData.options || ["No result generated"];
+
+                    currentOptions.forEach((opt, index) => {
+                        // Safe escaping for the copy button logic, not needed for save logic anymore
+                        const escapedOpt = opt.replace(/`/g, "\\`").replace(/"/g, "&quot;");
+
+                        const row = `
+                            <tr class="group hover:bg-indigo-50/40 transition-colors cursor-pointer" onclick="selectOption(${index})">
+                                <td class="py-5 px-6 align-top text-center">
+                                    <div class="mt-1">
+                                        <input type="radio" name="text_choice" id="opt_radio_${index}" 
+                                            class="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-600 cursor-pointer accent-indigo-600">
+                                    </div>
+                                </td>
+                                <td class="py-5 px-6 font-semibold text-indigo-600 align-top text-xs pt-6">OPTION 0${index + 1}</td>
+                                <td class="py-5 px-6 leading-relaxed text-slate-600 align-top">${opt}</td>
+                                <td class="py-5 px-6 text-right align-top">
+                                    <button onclick="event.stopPropagation(); copyText(\`${escapedOpt}\`)" class="text-slate-400 hover:text-indigo-600 p-2 rounded-lg hover:bg-white border border-transparent hover:border-slate-200 shadow-sm hover:shadow transition-all" title="Copy">
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                        tableBody.innerHTML += row;
+                    });
+
+                    // Update form metadata
+                    document.getElementById('formOriginal').value = text;
+                    document.getElementById('formAction').value = action;
+
+                    // Select the first option by default
+                    if (currentOptions.length > 0) {
+                        selectOption(0);
+                    }
+
+                    resultArea.classList.remove('hidden');
+                    lucide.createIcons();
+                } else {
+                    alert("Error: " + (data.error || "Unknown error"));
                 }
-
-                currentOptions = data.result.options.map(o => o.text);
-
-                currentOptions.forEach((opt, i) => {
-                    tableBody.innerHTML += `
-                    <tr onclick="selectOption(${i})" class="cursor-pointer hover:bg-indigo-50">
-                        <td class="p-4 text-center">
-                            <input type="radio" name="pick" id="opt_${i}">
-                        </td>
-                        <td class="p-4 font-semibold text-indigo-600">OPTION 0${i+1}</td>
-                        <td class="p-4">${opt}</td>
-                        <td class="p-4 text-right">
-                            <button onclick="event.stopPropagation(); navigator.clipboard.writeText(\`${opt}\`)">
-                                Copy
-                            </button>
-                        </td>
-                    </tr>
-                `;
-                });
-
-                document.getElementById('formOriginal').value = text;
-                document.getElementById('formAction').value = action;
-
-                selectOption(0);
-                resultArea.classList.remove('hidden');
-                lucide.createIcons();
-
-            } catch (err) {
-                console.error(err);
+            } catch (e) {
+                console.error(e);
                 loadingArea.classList.add('hidden');
-                alert("Request failed. Check console.");
+                alert("Request failed. Check console for details.");
             }
         }
 
-        function selectOption(i) {
-            document.getElementById('opt_' + i).checked = true;
-            document.getElementById('formGenerated').value = currentOptions[i];
+        // New function to handle selection
+        function selectOption(index) {
+            // 1. Visually check the radio button
+            const radio = document.getElementById('opt_radio_' + index);
+            if (radio) radio.checked = true;
+
+            // 2. Update the hidden input for the Save Form
+            document.getElementById('formGenerated').value = currentOptions[index];
         }
 
         function copyText(text) {
