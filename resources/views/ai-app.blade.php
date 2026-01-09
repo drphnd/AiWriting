@@ -324,21 +324,12 @@
                 const data = await response.json();
                 loadingArea.classList.add('hidden');
 
-                if (data.result) {
-                    let aiData;
-                    try {
-                        aiData = JSON.parse(data.result);
-                    } catch (e) {
-                        aiData = {
-                            options: [data.result]
-                        };
-                    }
-
-                    currentOptions = aiData.options || ["No result generated"];
+                if (data.options && data.options.length > 0) {
+                    currentOptions = data.options || [];
 
                     currentOptions.forEach((opt, index) => {
                         // Safe escaping for the copy button logic, not needed for save logic anymore
-                        const escapedOpt = opt.replace(/`/g, "\\`").replace(/"/g, "&quot;");
+                        const escapedOpt = opt;
 
                         const row = `
                             <tr class="group hover:bg-indigo-50/40 transition-colors cursor-pointer" onclick="selectOption(${index})">
