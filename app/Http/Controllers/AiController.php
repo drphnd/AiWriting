@@ -31,7 +31,7 @@ class AiController extends Controller
         try {
             // Ambil referensi ke table 'saved_texts'
             $reference = $this->database->getReference($this->tablename);
-            
+
             // Ambil semua data (Firebase filtering agak terbatas, kita filter di PHP)
             $snapshot = $reference->orderByChild('user_id')->equalTo(Auth::id())->getSnapshot();
             $value = $snapshot->getValue();
@@ -47,7 +47,6 @@ class AiController extends Controller
                     ->sortByDesc('created_at') // Sort manual karena Firebase sort menimpa filter
                     ->values();
             }
-
         } catch (\Exception $e) {
             $savedTexts = [];
         }
@@ -94,6 +93,21 @@ class AiController extends Controller
         - If a word limit is specified, you MUST obey it strictly.
         - NEVER exceed the requested word limit.";
 
+        $responseSchema = [
+            'type' => 'object',
+            'properties' => [
+                'options' => [
+                    'type' => 'array',
+                    'minItems' => 2,
+                    'maxItems' => 2,
+                    'items' => [
+                        'type' => 'string'
+                    ]
+                ]
+            ],
+            'required' => ['options']
+        ];
+
         if ($request->action === 'shorten') {
             $limit = $request->word_limit ?? 20;
             $specificPrompt = "Summarize the text in {$limit} words or fewer. - NEVER exceed {$limit} words. - Be concise and clear. - Preserve the core meaning.";
@@ -109,22 +123,35 @@ class AiController extends Controller
         $response = Http::withHeaders([
             'Content-Type' => 'application/json',
         ])->post(
-            // GANTI URL MENJADI INI:
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={$apiKey}",
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}",
             [
-                'contents' => [['parts' => [['text' => "Original Text: " . $request->text]]]],
-                'systemInstruction' => [
-                    'parts' => [['text' => $baseInstruction . "\n\n" . $specificPrompt]]
+                'contents' => [
+                    [
+                        'parts' => [
+                            ['text' => $request->text]
+                        ]
+                    ]
                 ],
-                'generationConfig' => ['response_mime_type' => 'application/json']
+                'systemInstruction' => [
+                    'parts' => [
+                        ['text' => $baseInstruction . "\n\n" . $specificPrompt]
+                    ]
+                ],
+                'generationConfig' => [
+                    'responseMimeType' => 'application/json',
+                    'responseSchema'   => $responseSchema
+                ]
             ]
         );
 
         if ($response->successful()) {
-            $rawJson = $response->json('candidates.0.content.parts.0.text');
-            return response()->json(['result' => $rawJson]);
-        }
+            $structured = $response->json('candidates.0.content');
 
+            return response()->json([
+                'options' => $structured['options'] ?? []
+            ]);
+        }
+        
         return response()->json(['error' => 'API Call Failed: ' . $response->body()], 500);
     }
 
@@ -146,12 +173,12 @@ class AiController extends Controller
                 'created_at'     => now()->toIso8601String(),
                 'updated_at'     => now()->toIso8601String(),
             ]);
-            
+
             // Hapus baris return "SUKSES..." dan dd()
-            
+
         } catch (\Exception $e) {
             // Kembalikan ke redirect error
-             return redirect()->back()->with('error', 'Failed to save: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Failed to save: ' . $e->getMessage());
         }
 
         return redirect()->back();
@@ -169,7 +196,7 @@ class AiController extends Controller
         $reference = $this->database->getReference($this->tablename);
         $snapshot = $reference->orderByChild('user_id')->equalTo(Auth::id())->getSnapshot();
         $value = $snapshot->getValue();
-        
+
         $savedTexts = collect($value ?: [])
             ->map(function ($item, $key) {
                 $item['id'] = $key;
